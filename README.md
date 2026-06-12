@@ -7,7 +7,7 @@ Local speech-to-text for Russian audio files using [faster-whisper](https://gith
 audio file (.m4a / .mp3 / .wav)
         ↓  transcribe.py  (faster-whisper + GPU)
    transcript.txt  (with timestamps)
-        ↓  format_docx.py  (Ollama LLM)
+        ↓  format-file.py  (Ollama LLM)
    formatted.docx  (headings, paragraphs, clean text)
 ```
 
@@ -21,7 +21,21 @@ audio file (.m4a / .mp3 / .wav)
 | NVIDIA GPU | any CUDA-capable | RTX 4090 recommended for large-v3 |
 | CUDA Toolkit | **12.x** | Required — see installation below |
 | ffmpeg | any | Required for .m4a / .mp3 input |
-| Ollama | any | Only needed for `format_docx.py` |
+| Ollama | any | Only needed for `format-file.py` |
+
+### Minimum hardware
+
+`transcribe.py` runs Whisper on the GPU (`device="cuda"`), so an **NVIDIA GPU is required** — there is no CPU fallback in the current code. Ollama (the optional `format-file.py` step) can run on either GPU or CPU.
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| GPU | NVIDIA CUDA-capable, ~2 GB VRAM (`--model small`/`medium`) | RTX 4090 / 24 GB VRAM (`large-v3` + large Ollama models) |
+| GPU VRAM for `large-v3` | ~6 GB | 8 GB+ |
+| CPU | 4-core x86-64 | 8+ cores (faster Ollama on CPU, faster ffmpeg decode) |
+| System RAM | 8 GB | 16 GB+ |
+| Disk | ~5 GB free (model cache) | 30 GB+ if using large Ollama models |
+
+> On GPUs with less than ~6 GB VRAM, use `--model small` or `--model medium`. Running Ollama formatting on CPU works but is significantly slower than on GPU.
 
 ---
 
@@ -62,7 +76,7 @@ Or download manually: https://ffmpeg.org/download.html
 
 ```bash
 pip install faster-whisper
-pip install python-docx requests   # only needed for format_docx.py
+pip install python-docx requests   # only needed for format-file.py
 ```
 
 ### 4. Ollama (optional, for .docx output)
@@ -79,7 +93,7 @@ ollama pull qwen2.5:14b   # ~9 GB  — better quality
 ollama pull qwen2.5:32b   # ~20 GB — best quality, fits on RTX 4090
 ```
 
-Start Ollama before running `format_docx.py`:
+Start Ollama before running `format-file.py`:
 ```bash
 ollama serve
 ```
@@ -94,9 +108,9 @@ ollama serve
 python transcribe.py recording.m4a
 ```
 
-Output: `recording.txt` with timestamped segments:
+Output: `recording.txt` with timestamped segments (transcribed text is in the source language, e.g. Russian):
 ```
-[00:00:01 --> 00:00:05] Добрый день, сегодня мы поговорим о...
+[00:00:01 --> 00:00:05] <transcribed speech for this segment>
 [00:00:05 --> 00:00:12] ...
 ```
 
@@ -127,7 +141,7 @@ python transcribe.py recording.m4a --output my_transcript.txt
 ### Step 2 — Format transcript to .docx (optional)
 
 ```bash
-python format_docx.py recording.txt --model qwen2.5:7b
+python format-file.py recording.txt --model qwen2.5:7b
 ```
 
 Output: `recording.docx` with:
@@ -145,7 +159,7 @@ Output: `recording.docx` with:
 | `--output` | same name as input | Custom output path |
 
 ```bash
-python format_docx.py recording.txt --model qwen2.5:32b --chunk-minutes 20
+python format-file.py recording.txt --model qwen2.5:32b --chunk-minutes 20
 ```
 
 > Long files are automatically split into chunks to stay within LLM context limits. Each chunk is processed independently and merged into a single document.
@@ -156,7 +170,7 @@ python format_docx.py recording.txt --model qwen2.5:32b --chunk-minutes 20
 
 **transcribe.py** uses [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — a reimplementation of OpenAI's Whisper model using CTranslate2. It runs on GPU via CUDA and is ~4× faster than the original Whisper with the same accuracy. VAD (Voice Activity Detection) filtering is enabled to skip silence, which further speeds up processing.
 
-**format_docx.py** splits the transcript into time-based chunks and sends each to a locally running Ollama LLM with a prompt that instructs it to add paragraph breaks, detect topic headings, and remove speech artifacts. The structured output is then assembled into a .docx file using python-docx.
+**format-file.py** splits the transcript into time-based chunks and sends each to a locally running Ollama LLM with a prompt that instructs it to add paragraph breaks, detect topic headings, and remove speech artifacts. The structured output is then assembled into a .docx file using python-docx.
 
 All processing happens **100% locally** — no data is sent to any external service.
 
@@ -167,8 +181,8 @@ All processing happens **100% locally** — no data is sent to any external serv
 **`cublas64_12.dll is not found`**
 You have CUDA 13 installed but faster-whisper requires CUDA 12. Install CUDA 12.6 alongside it and add the bin folder to PATH (see Installation → CUDA Toolkit 12).
 
-**`Ollama недоступна на localhost:11434`**
-Start Ollama with `ollama serve` in WSL or Windows terminal before running format_docx.py.
+**`Ollama is not available on localhost:11434`**
+Start Ollama with `ollama serve` in WSL or a Windows terminal before running format-file.py.
 
 **Model not found in Ollama**
 Run `ollama list` to see installed models, then pass the exact name with `--model`.

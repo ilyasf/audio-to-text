@@ -1,12 +1,12 @@
 """
-Транскрипция русских аудиофайлов через faster-whisper + RTX 4090
+Transcribe Russian audio files using faster-whisper + RTX 4090
 
-Установка (один раз):
+Setup (once):
     pip install faster-whisper
-    # ffmpeg нужен для m4a: https://ffmpeg.org/download.html
-    # или: winget install ffmpeg
+    # ffmpeg is required for m4a: https://ffmpeg.org/download.html
+    # or: winget install ffmpeg
 
-Запуск:
+Usage:
     python transcribe.py audio.m4a
     python transcribe.py audio.m4a --model large-v3
     python transcribe.py audio.m4a --output result.txt
@@ -22,7 +22,7 @@ def transcribe(audio_path: str, model_name: str = "large-v3", output_path: str =
 
     audio_path = Path(audio_path)
     if not audio_path.exists():
-        print(f"Файл не найден: {audio_path}")
+        print(f"File not found: {audio_path}")
         sys.exit(1)
 
     if output_path is None:
@@ -30,20 +30,20 @@ def transcribe(audio_path: str, model_name: str = "large-v3", output_path: str =
     else:
         output_path = Path(output_path)
 
-    print(f"Загружаю модель {model_name} на GPU...")
+    print(f"Loading model {model_name} on GPU...")
     model = WhisperModel(model_name, device="cuda", compute_type="float16")
 
-    print(f"Транскрибирую: {audio_path.name}")
+    print(f"Transcribing: {audio_path.name}")
     segments, info = model.transcribe(
         str(audio_path),
         language="ru",
         beam_size=5,
-        vad_filter=True,          # убирает тишину, ускоряет обработку
+        vad_filter=True,          # removes silence, speeds up processing
         vad_parameters=dict(min_silence_duration_ms=500),
     )
 
-    print(f"Язык: {info.language} (уверенность {info.language_probability:.0%})")
-    print(f"Длительность: {info.duration / 60:.1f} мин\n")
+    print(f"Language: {info.language} (confidence {info.language_probability:.0%})")
+    print(f"Duration: {info.duration / 60:.1f} min\n")
 
     lines = []
     for segment in segments:
@@ -53,7 +53,7 @@ def transcribe(audio_path: str, model_name: str = "large-v3", output_path: str =
         lines.append(line)
 
     output_path.write_text("\n".join(lines), encoding="utf-8")
-    print(f"\nГотово! Сохранено в: {output_path}")
+    print(f"\nDone! Saved to: {output_path}")
 
 
 def _fmt(seconds: float) -> str:
@@ -63,15 +63,15 @@ def _fmt(seconds: float) -> str:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Транскрипция аудио на русском")
-    parser.add_argument("audio", help="Путь к аудиофайлу (.m4a, .mp3, .wav, ...)")
+    parser = argparse.ArgumentParser(description="Transcribe Russian audio")
+    parser.add_argument("audio", help="Path to audio file (.m4a, .mp3, .wav, ...)")
     parser.add_argument(
         "--model",
         default="large-v3",
         choices=["tiny", "base", "small", "medium", "large-v2", "large-v3"],
-        help="Модель Whisper (по умолчанию: large-v3)",
+        help="Whisper model (default: large-v3)",
     )
-    parser.add_argument("--output", help="Путь к выходному .txt файлу (опционально)")
+    parser.add_argument("--output", help="Path to output .txt file (optional)")
     args = parser.parse_args()
 
     transcribe(args.audio, args.model, args.output)
